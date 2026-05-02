@@ -49,6 +49,24 @@ def _user_tz(context: ContextTypes.DEFAULT_TYPE, chat_id: int) -> str:
     return user.timezone if user else context.bot_data.get("default_tz", "UTC")
 
 
+def _ensure_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Make sure the chat's user row exists before any reminder is inserted.
+    Reminders have a FK to users; without this, a fresh chat that jumps straight
+    to /remind or ➕ New reminder hits an IntegrityError."""
+    db: Database = context.bot_data["db"]
+    chat = update.effective_chat
+    user = update.effective_user
+    if chat is None:
+        return
+    if db.get_user(chat.id) is None:
+        db.upsert_user(
+            chat.id,
+            user.username if user else None,
+            user.first_name if user else None,
+            context.bot_data.get("default_tz", "Asia/Manila"),
+        )
+
+
 async def _send_or_edit(
     update: Update, text: str, reply_markup: InlineKeyboardMarkup | None = None
 ) -> None:
@@ -149,7 +167,8 @@ def _fired_kb(reminder_id: int) -> InlineKeyboardMarkup:
 
 # ---------------- New-reminder type chooser ----------------
 
-async def new_chooser(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+async def new_chooser(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    _ensure_user(update, context)
     kb = InlineKeyboardMarkup(
         [
             [
@@ -169,6 +188,7 @@ async def new_chooser(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
 async def remind_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if update.callback_query:
         await update.callback_query.answer()
+    _ensure_user(update, context)
     context.user_data.pop("remind", None)
     context.user_data["remind"] = {}
     await _send_or_edit(update, messages.REMIND_ASK_WHEN, _when_quick_kb())
@@ -299,6 +319,7 @@ async def remind_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 async def every_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if update.callback_query:
         await update.callback_query.answer()
+    _ensure_user(update, context)
     context.user_data.pop("every", None)
     context.user_data["every"] = {}
     await _send_or_edit(update, messages.EVERY_ASK_FREQ, _freq_kb())

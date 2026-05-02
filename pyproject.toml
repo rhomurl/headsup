@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "headsup"
+version = "0.1.0"
+description = "A friendly Telegram reminder bot."
+requires-python = ">=3.11"
+dependencies = [
+    "python-telegram-bot[job-queue]>=21.0",
+    "python-dateutil>=2.9",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.5",
+]
+
+[project.scripts]
+headsup = "headsup.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["headsup*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

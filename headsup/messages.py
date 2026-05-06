@@ -81,6 +81,7 @@ LIST_LINE = "• {pos}. *{text}*\n   {when_str}{rec}"
 ACTION_DONE = "✅ Marked done."
 ACTION_SNOOZED = "💤 Snoozed until *{when_str}*."
 ACTION_CANCELLED = "🔕 Cancelled."
+ACTION_SKIPPED = "⏭ Skipped. Next up: *{when_str}*."
 NOT_FOUND = "🤷 I couldn't find that reminder. It may have already been completed."
 
 SNOOZE_PICK_DURATION = "Snooze *#{id}* for how long?"

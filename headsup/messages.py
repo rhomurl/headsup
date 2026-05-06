@@ -69,6 +69,10 @@ REMIND_DONE = "✅ Got it! I'll remind you on *{when_str}* to *{text}*."
 
 # /every conversational flow
 EVERY_ASK_FREQ = "🔁 *How often* should this repeat?"
+EVERY_ASK_MDAY = (
+    "📅 Which *day of the month* should this repeat on?\n\n"
+    "_Days 29–31 (marked \\*) will fall on the last day of the month when the month is shorter._"
+)
 EVERY_ASK_TIME = "⏰ At what time on {freq_label}? Tap one or type, e.g. `7:30 AM`."
 EVERY_ASK_TEXT = "📝 Set: *{freq_str}*.\n\nWhat should I remind you about?"
 EVERY_DONE = "🔁 Set! *{freq_str}* I'll remind you to *{text}*.\nFirst one: *{when_str}*."

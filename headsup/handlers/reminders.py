@@ -1,6 +1,7 @@
 """Conversational handlers for /remind, /every, /list, /done, /snooze, /cancel,
 plus the New-reminder type chooser, the Edit flow, and the per-reminder Manage menu."""
 
+import calendar
 from datetime import datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -28,6 +29,8 @@ R_WHEN, R_TIME, R_TEXT = range(3)
 E_FREQ, E_TIME, E_TEXT = range(3, 6)
 # Edit states
 ED_MENU, ED_WHEN, ED_TIME, ED_TEXT = range(6, 10)
+# Monthly day-of-month picker state
+E_MDAY = 10
 
 TIME_PRESETS = [
     ("7 AM", time(7, 0)),
@@ -132,9 +135,25 @@ def _freq_kb() -> InlineKeyboardMarkup:
                 InlineKeyboardButton("Every 3 days", callback_data="e:f:every:3d"),
                 InlineKeyboardButton("Every week", callback_data="e:f:every:7d"),
             ],
+            [InlineKeyboardButton("Monthly", callback_data="e:f:monthly")],
             [InlineKeyboardButton("Cancel", callback_data="r:cancel")],
         ]
     )
+
+
+def _month_day_kb() -> InlineKeyboardMarkup:
+    rows = []
+    for start in range(1, 29, 7):
+        rows.append([
+            InlineKeyboardButton(str(d), callback_data=f"e:md:{d}")
+            for d in range(start, start + 7)
+        ])
+    rows.append([
+        InlineKeyboardButton(f"{d}*", callback_data=f"e:md:{d}")
+        for d in (29, 30, 31)
+    ])
+    rows.append([InlineKeyboardButton("Cancel", callback_data="r:cancel")])
+    return InlineKeyboardMarkup(rows)
 
 
 def _post_create_kb(reminder_id: int) -> InlineKeyboardMarkup:
@@ -340,8 +359,31 @@ async def every_freq_pick(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif parts.startswith("every:"):
         recurrence = parts
         freq_label = f"every {parts[len('every:'):]}"
+    elif parts == "monthly":
+        await q.edit_message_text(
+            messages.EVERY_ASK_MDAY,
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=_month_day_kb(),
+        )
+        return E_MDAY
     else:
         return E_FREQ
+    context.user_data["every"]["recurrence"] = recurrence
+    context.user_data["every"]["freq_label"] = freq_label
+    await q.edit_message_text(
+        messages.EVERY_ASK_TIME.format(freq_label=freq_label),
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=_time_kb(),
+    )
+    return E_TIME
+
+
+async def every_mday_pick(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    q = update.callback_query
+    await q.answer()
+    day = int(q.data.split(":")[2])
+    recurrence = f"monthly:{day}"
+    freq_label = f"monthly on the {parse._ordinal(day)}"
     context.user_data["every"]["recurrence"] = recurrence
     context.user_data["every"]["freq_label"] = freq_label
     await q.edit_message_text(
@@ -404,6 +446,19 @@ def _first_fire(recurrence: str, t: time, now: datetime, tz: ZoneInfo) -> dateti
         candidate = today_at + timedelta(days=days_ahead)
         if candidate <= now:
             candidate += timedelta(days=7)
+        return candidate
+    if recurrence.startswith("monthly:"):
+        target_day = int(recurrence.split(":")[1])
+        year, month = now.year, now.month
+        last = calendar.monthrange(year, month)[1]
+        candidate = today_at.replace(day=min(target_day, last))
+        if candidate <= now:
+            if month == 12:
+                year, month = year + 1, 1
+            else:
+                month += 1
+            last = calendar.monthrange(year, month)[1]
+            candidate = candidate.replace(year=year, month=month, day=min(target_day, last))
         return candidate
     return today_at
 
@@ -813,6 +868,10 @@ def every_conversation() -> ConversationHandler:
         states={
             E_FREQ: [
                 CallbackQueryHandler(every_freq_pick, pattern=r"^e:f:"),
+                CallbackQueryHandler(conv_cancel, pattern=r"^r:cancel$"),
+            ],
+            E_MDAY: [
+                CallbackQueryHandler(every_mday_pick, pattern=r"^e:md:"),
                 CallbackQueryHandler(conv_cancel, pattern=r"^r:cancel$"),
             ],
             E_TIME: [

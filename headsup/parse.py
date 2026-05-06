@@ -1,5 +1,6 @@
 """Natural-language parsers for dates, times, and durations."""
 
+import calendar
 import re
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
@@ -152,6 +153,16 @@ def to_utc(dt: datetime) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
+def _advance_month(dt: datetime, day: int) -> datetime:
+    """Return dt advanced one calendar month with day clamped to that month's last day."""
+    if dt.month == 12:
+        year, month = dt.year + 1, 1
+    else:
+        year, month = dt.year, dt.month + 1
+    last = calendar.monthrange(year, month)[1]
+    return dt.replace(year=year, month=month, day=min(day, last))
+
+
 def next_recurring(prev_utc: datetime, recurrence: str, tz_name: str) -> datetime | None:
     """Given the time a recurring reminder just fired, compute the next fire time (UTC)."""
     tz = ZoneInfo(tz_name)
@@ -164,6 +175,9 @@ def next_recurring(prev_utc: datetime, recurrence: str, tz_name: str) -> datetim
         delta = parse_duration(recurrence[len("every:"):])
         if delta:
             return to_utc(local + delta)
+    if recurrence.startswith("monthly:"):
+        day = int(recurrence.split(":")[1])
+        return to_utc(_advance_month(local, day))
     return None
 
 
@@ -171,6 +185,12 @@ def format_when(dt_utc: datetime, tz_name: str) -> str:
     """Friendly local-time formatting: 'Monday, May 5 at 9:00 AM'."""
     local = dt_utc.astimezone(ZoneInfo(tz_name))
     return local.strftime("%A, %b %-d at %-I:%M %p")
+
+
+def _ordinal(n: int) -> str:
+    if 11 <= n % 100 <= 13:
+        return f"{n}th"
+    return f"{n}{['th', 'st', 'nd', 'rd', 'th'][min(n % 10, 4)]}"
 
 
 def format_recurrence(recurrence: str | None) -> str:
@@ -184,4 +204,7 @@ def format_recurrence(recurrence: str | None) -> str:
         return f"every {WEEKDAY_NAMES[idx]}" if idx is not None else "weekly"
     if recurrence.startswith("every:"):
         return f"every {recurrence[len('every:'):]}"
+    if recurrence.startswith("monthly:"):
+        day = int(recurrence.split(":")[1])
+        return f"monthly on the {_ordinal(day)}"
     return recurrence

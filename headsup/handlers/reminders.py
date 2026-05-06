@@ -501,9 +501,9 @@ async def conv_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
 # ---------------- /list, /done, /snooze, /cancel ----------------
 
-def _format_reminder_line(r: Reminder, tz_name: str) -> str:
+def _format_reminder_line(r: Reminder, tz_name: str, pos: int) -> str:
     return messages.LIST_LINE.format(
-        id=r.id,
+        pos=pos,
         text=r.text,
         when_str=parse.format_when(r.next_run_at, tz_name),
         rec=f" · {parse.format_recurrence(r.recurrence)}" if r.recurrence else "",
@@ -519,10 +519,13 @@ async def list_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     tz_name = _user_tz(context, chat_id)
     body = messages.LIST_HEADER + "\n\n" + "\n\n".join(
-        _format_reminder_line(r, tz_name) for r in items
+        _format_reminder_line(r, tz_name, pos) for pos, r in enumerate(items, 1)
     )
-    rows = [[InlineKeyboardButton(f"Manage #{r.id}", callback_data=f"act:manage:{r.id}")]
-            for r in items]
+    buttons = [
+        InlineKeyboardButton(f"Manage {pos}", callback_data=f"act:manage:{r.id}")
+        for pos, r in enumerate(items, 1)
+    ]
+    rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
     await update.effective_message.reply_text(
         body, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(rows)
     )
@@ -580,7 +583,7 @@ async def action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         chat_id = q.message.chat_id
         tz_name = _user_tz(context, chat_id)
         body = (
-            f"*#{reminder.id}* — *{reminder.text}*\n"
+            f"*{reminder.text}*\n"
             f"{parse.format_when(reminder.next_run_at, tz_name)}"
             f"{' · ' + parse.format_recurrence(reminder.recurrence) if reminder.recurrence else ''}"
         )

@@ -562,6 +562,8 @@ def _manage_kb(reminder: Reminder) -> InlineKeyboardMarkup:
             InlineKeyboardButton("Cancel reminder", callback_data=f"act:cancel:{reminder.id}"),
         ],
     ]
+    if reminder.recurrence:
+        rows.append([InlineKeyboardButton("Skip this one", callback_data=f"act:skip:{reminder.id}")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -602,6 +604,24 @@ async def action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         db.set_status(reminder_id, "cancelled")
         scheduler.cancel(context.application, reminder_id)
         await q.edit_message_text(messages.ACTION_CANCELLED)
+        return
+
+    if action == "skip":
+        chat_id = q.message.chat_id
+        tz_name = _user_tz(context, chat_id)
+        next_utc = parse.next_recurring(reminder.next_run_at, reminder.recurrence, tz_name)
+        if next_utc:
+            db.update_next_run(reminder_id, next_utc)
+            reminder.next_run_at = next_utc
+            scheduler.schedule(context.application, reminder)
+            await q.edit_message_text(
+                messages.ACTION_SKIPPED.format(when_str=parse.format_when(next_utc, tz_name)),
+                parse_mode=ParseMode.MARKDOWN,
+            )
+        else:
+            db.set_status(reminder_id, "done")
+            scheduler.cancel(context.application, reminder_id)
+            await q.edit_message_text(messages.ACTION_DONE)
         return
 
     if action == "snoozepick":

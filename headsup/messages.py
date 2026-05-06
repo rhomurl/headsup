@@ -77,7 +77,7 @@ CANCELLED = "Cancelled."
 
 # /list and action flows
 LIST_HEADER = "*Your active reminders:*"
-LIST_LINE = "• #{id} — *{text}*\n   {when_str}{rec}"
+LIST_LINE = "• {pos}. *{text}*\n   {when_str}{rec}"
 ACTION_DONE = "✅ Marked done."
 ACTION_SNOOZED = "💤 Snoozed until *{when_str}*."
 ACTION_CANCELLED = "🔕 Cancelled."

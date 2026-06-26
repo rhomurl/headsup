@@ -163,6 +163,18 @@ def _advance_month(dt: datetime, day: int) -> datetime:
     return dt.replace(year=year, month=month, day=min(day, last))
 
 
+def _format_every_label(value: str) -> str:
+    delta = parse_duration(value)
+    if delta is None:
+        return f"every {value}"
+    days = delta.days
+    if delta == timedelta(days=1):
+        return "every day"
+    if days and delta == timedelta(days=days):
+        return f"every {days} day{'s' if days != 1 else ''}"
+    return f"every {value}"
+
+
 def next_recurring(prev_utc: datetime, recurrence: str, tz_name: str) -> datetime | None:
     """Given the time a recurring reminder just fired, compute the next fire time (UTC)."""
     tz = ZoneInfo(tz_name)
@@ -171,6 +183,8 @@ def next_recurring(prev_utc: datetime, recurrence: str, tz_name: str) -> datetim
         return to_utc(local + timedelta(days=1))
     if recurrence.startswith("weekly:"):
         return to_utc(local + timedelta(days=7))
+    if recurrence.startswith("biweekly:"):
+        return to_utc(local + timedelta(days=14))
     if recurrence.startswith("every:"):
         delta = parse_duration(recurrence[len("every:"):])
         if delta:
@@ -204,8 +218,9 @@ def next_recurring_after(
             candidate += timedelta(days=1)
         return to_utc(candidate)
 
-    if recurrence.startswith("weekly:"):
+    if recurrence.startswith("weekly:") or recurrence.startswith("biweekly:"):
         wd = WEEKDAYS[recurrence.split(":", 1)[1]]
+        step_days = 14 if recurrence.startswith("biweekly:") else 7
         candidate = after_local.replace(
             hour=prev_local.hour,
             minute=prev_local.minute,
@@ -214,8 +229,12 @@ def next_recurring_after(
         )
         days_ahead = (wd - candidate.weekday()) % 7
         candidate += timedelta(days=days_ahead)
+        if recurrence.startswith("biweekly:"):
+            offset_days = (candidate.date() - prev_local.date()).days % 14
+            if offset_days != 0:
+                candidate += timedelta(days=(14 - offset_days) % 14)
         if candidate <= after_local:
-            candidate += timedelta(days=7)
+            candidate += timedelta(days=step_days)
         return to_utc(candidate)
 
     if recurrence.startswith("monthly:"):
@@ -263,8 +282,12 @@ def format_recurrence(recurrence: str | None) -> str:
         wd = recurrence.split(":", 1)[1]
         idx = WEEKDAYS.get(wd.lower())
         return f"every {WEEKDAY_NAMES[idx]}" if idx is not None else "weekly"
+    if recurrence.startswith("biweekly:"):
+        wd = recurrence.split(":", 1)[1]
+        idx = WEEKDAYS.get(wd.lower())
+        return f"every other {WEEKDAY_NAMES[idx]}" if idx is not None else "every other week"
     if recurrence.startswith("every:"):
-        return f"every {recurrence[len('every:'):]}"
+        return _format_every_label(recurrence[len("every:"):])
     if recurrence.startswith("monthly:"):
         day = int(recurrence.split(":")[1])
         return f"monthly on the {_ordinal(day)}"

@@ -12,7 +12,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, ContextTypes
 
-from headsup import messages, parse
+from headsup import messages
 from headsup.db import Database, User
 
 log = logging.getLogger(__name__)

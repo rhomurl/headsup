@@ -181,6 +181,67 @@ def next_recurring(prev_utc: datetime, recurrence: str, tz_name: str) -> datetim
     return None
 
 
+def next_recurring_after(
+    prev_utc: datetime, recurrence: str, tz_name: str, after_utc: datetime
+) -> datetime | None:
+    """Return the next scheduled occurrence strictly after ``after_utc``.
+
+    Unlike ``next_recurring()``, this preserves the intended recurrence when the
+    app was offline past one or more scheduled fires.
+    """
+    tz = ZoneInfo(tz_name)
+    prev_local = prev_utc.astimezone(tz)
+    after_local = after_utc.astimezone(tz)
+
+    if recurrence == "daily":
+        candidate = after_local.replace(
+            hour=prev_local.hour,
+            minute=prev_local.minute,
+            second=prev_local.second,
+            microsecond=prev_local.microsecond,
+        )
+        if candidate <= after_local:
+            candidate += timedelta(days=1)
+        return to_utc(candidate)
+
+    if recurrence.startswith("weekly:"):
+        wd = WEEKDAYS[recurrence.split(":", 1)[1]]
+        candidate = after_local.replace(
+            hour=prev_local.hour,
+            minute=prev_local.minute,
+            second=prev_local.second,
+            microsecond=prev_local.microsecond,
+        )
+        days_ahead = (wd - candidate.weekday()) % 7
+        candidate += timedelta(days=days_ahead)
+        if candidate <= after_local:
+            candidate += timedelta(days=7)
+        return to_utc(candidate)
+
+    if recurrence.startswith("monthly:"):
+        day = int(recurrence.split(":")[1])
+        candidate = after_local.replace(
+            day=min(day, calendar.monthrange(after_local.year, after_local.month)[1]),
+            hour=prev_local.hour,
+            minute=prev_local.minute,
+            second=prev_local.second,
+            microsecond=prev_local.microsecond,
+        )
+        if candidate <= after_local:
+            candidate = _advance_month(candidate, day)
+        return to_utc(candidate)
+
+    if recurrence.startswith("every:"):
+        candidate = prev_utc
+        while candidate <= after_utc:
+            candidate = next_recurring(candidate, recurrence, tz_name)
+            if candidate is None:
+                return None
+        return candidate
+
+    return None
+
+
 def format_when(dt_utc: datetime, tz_name: str) -> str:
     """Friendly local-time formatting: 'Monday, May 5 at 9:00 AM'."""
     local = dt_utc.astimezone(ZoneInfo(tz_name))

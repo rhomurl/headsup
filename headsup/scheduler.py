@@ -43,10 +43,21 @@ def restore_on_startup(app: Application) -> int:
     reminders = db.all_active()
     now = datetime.now(timezone.utc)
     for r in reminders:
-        # Past-due reminders fire ~immediately so the user isn't silently skipped.
         if r.next_run_at < now:
-            db.update_next_run(r.id, now)
-            r.next_run_at = now
+            if r.recurrence:
+                user = db.get_user(r.chat_id)
+                tz_name = user.timezone if user else "UTC"
+                next_utc = parse.next_recurring_after(r.next_run_at, r.recurrence, tz_name, now)
+                if next_utc:
+                    db.update_next_run(r.id, next_utc)
+                    r.next_run_at = next_utc
+                else:
+                    db.update_next_run(r.id, now)
+                    r.next_run_at = now
+            else:
+                # One-time reminders still fire ~immediately so the user isn't silently skipped.
+                db.update_next_run(r.id, now)
+                r.next_run_at = now
         schedule(app, r)
     log.info("Restored %d active reminders", len(reminders))
     return len(reminders)

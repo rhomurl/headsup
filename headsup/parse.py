@@ -218,8 +218,9 @@ def next_recurring_after(
             candidate += timedelta(days=1)
         return to_utc(candidate)
 
-    if recurrence.startswith("weekly:"):
+    if recurrence.startswith("weekly:") or recurrence.startswith("biweekly:"):
         wd = WEEKDAYS[recurrence.split(":", 1)[1]]
+        step_days = 14 if recurrence.startswith("biweekly:") else 7
         candidate = after_local.replace(
             hour=prev_local.hour,
             minute=prev_local.minute,
@@ -228,8 +229,12 @@ def next_recurring_after(
         )
         days_ahead = (wd - candidate.weekday()) % 7
         candidate += timedelta(days=days_ahead)
+        if recurrence.startswith("biweekly:"):
+            offset_days = (candidate.date() - prev_local.date()).days % 14
+            if offset_days != 0:
+                candidate += timedelta(days=(14 - offset_days) % 14)
         if candidate <= after_local:
-            candidate += timedelta(days=7)
+            candidate += timedelta(days=step_days)
         return to_utc(candidate)
 
     if recurrence.startswith("monthly:"):

@@ -79,3 +79,45 @@ def test_restore_on_startup_preserves_weekly_day_for_overdue_recurring(tmp_path,
     assert reminder is not None
     assert reminder.next_run_at == datetime(2026, 6, 28, 10, 30, tzinfo=timezone.utc)
     assert app.job_queue.calls[0]["when"] == datetime(2026, 6, 28, 10, 30, tzinfo=timezone.utc)
+
+
+def test_restore_on_startup_preserves_biweekly_day_for_overdue_recurring(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "test.db"))
+    db.upsert_user(1, "alice", "Alice", "Asia/Manila")
+    reminder_id = db.add_reminder(
+        1,
+        "payday review",
+        datetime(2026, 6, 14, 10, 30, tzinfo=timezone.utc),
+        "biweekly:sun",
+    )
+    app = _FakeApp(db)
+
+    monkeypatch.setattr(scheduler, "datetime", _FixedDateTime)
+
+    scheduler.restore_on_startup(app)
+
+    reminder = db.get_reminder(reminder_id)
+    assert reminder is not None
+    assert reminder.next_run_at == datetime(2026, 6, 28, 10, 30, tzinfo=timezone.utc)
+    assert app.job_queue.calls[0]["when"] == datetime(2026, 6, 28, 10, 30, tzinfo=timezone.utc)
+
+
+def test_restore_on_startup_preserves_every_14_days_interval(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "test.db"))
+    db.upsert_user(1, "alice", "Alice", "Asia/Manila")
+    reminder_id = db.add_reminder(
+        1,
+        "backup phone photos",
+        datetime(2026, 6, 10, 23, 0, tzinfo=timezone.utc),
+        "every:14d",
+    )
+    app = _FakeApp(db)
+
+    monkeypatch.setattr(scheduler, "datetime", _FixedDateTime)
+
+    scheduler.restore_on_startup(app)
+
+    reminder = db.get_reminder(reminder_id)
+    assert reminder is not None
+    assert reminder.next_run_at == datetime(2026, 7, 8, 23, 0, tzinfo=timezone.utc)
+    assert app.job_queue.calls[0]["when"] == datetime(2026, 7, 8, 23, 0, tzinfo=timezone.utc)

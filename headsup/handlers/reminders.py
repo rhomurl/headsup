@@ -26,11 +26,11 @@ from headsup.db import Database, Reminder
 # /remind states
 R_WHEN, R_TIME, R_TEXT = range(3)
 # /every states
-E_FREQ, E_TIME, E_TEXT = range(3, 6)
+E_FREQ, E_WDAY, E_TIME, E_TEXT = range(3, 7)
 # Edit states
-ED_MENU, ED_WHEN, ED_TIME, ED_TEXT = range(6, 10)
+ED_MENU, ED_WHEN, ED_TIME, ED_TEXT = range(7, 11)
 # Monthly day-of-month picker state
-E_MDAY = 10
+E_MDAY = 11
 
 TIME_PRESETS = [
     ("7 AM", time(7, 0)),
@@ -129,6 +129,25 @@ def _freq_kb() -> InlineKeyboardMarkup:
                 InlineKeyboardButton("Every 14 days", callback_data="e:f:every:14d"),
             ],
             [InlineKeyboardButton("Monthly", callback_data="e:f:monthly")],
+            [InlineKeyboardButton("Cancel", callback_data="r:cancel")],
+        ]
+    )
+
+
+def _weekday_kb(mode: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("Mon", callback_data=f"e:wd:{mode}:mon"),
+                InlineKeyboardButton("Tue", callback_data=f"e:wd:{mode}:tue"),
+                InlineKeyboardButton("Wed", callback_data=f"e:wd:{mode}:wed"),
+                InlineKeyboardButton("Thu", callback_data=f"e:wd:{mode}:thu"),
+            ],
+            [
+                InlineKeyboardButton("Fri", callback_data=f"e:wd:{mode}:fri"),
+                InlineKeyboardButton("Sat", callback_data=f"e:wd:{mode}:sat"),
+                InlineKeyboardButton("Sun", callback_data=f"e:wd:{mode}:sun"),
+            ],
             [InlineKeyboardButton("Cancel", callback_data="r:cancel")],
         ]
     )
@@ -345,13 +364,16 @@ async def every_freq_pick(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if parts == "daily":
         recurrence = "daily"
         freq_label = "every day"
-    elif parts.startswith("weekly:"):
-        wd = parts.split(":", 1)[1]
-        recurrence = f"weekly:{wd}"
-        freq_label = f"every {parse.WEEKDAY_NAMES[parse.WEEKDAYS[wd]]}"
+    elif parts in {"weekly", "biweekly"}:
+        await q.edit_message_text(
+            messages.EVERY_ASK_WDAY,
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=_weekday_kb(parts),
+        )
+        return E_WDAY
     elif parts.startswith("every:"):
         recurrence = parts
-        freq_label = f"every {parts[len('every:'):]}"
+        freq_label = parse.format_recurrence(parts)
     elif parts == "monthly":
         await q.edit_message_text(
             messages.EVERY_ASK_MDAY,
@@ -361,6 +383,22 @@ async def every_freq_pick(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return E_MDAY
     else:
         return E_FREQ
+    context.user_data["every"]["recurrence"] = recurrence
+    context.user_data["every"]["freq_label"] = freq_label
+    await q.edit_message_text(
+        messages.EVERY_ASK_TIME.format(freq_label=freq_label),
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=_time_kb(),
+    )
+    return E_TIME
+
+
+async def every_weekday_pick(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    q = update.callback_query
+    await q.answer()
+    _, _, mode, wd = q.data.split(":")
+    recurrence = f"{mode}:{wd}"
+    freq_label = parse.format_recurrence(recurrence)
     context.user_data["every"]["recurrence"] = recurrence
     context.user_data["every"]["freq_label"] = freq_label
     await q.edit_message_text(
@@ -884,6 +922,10 @@ def every_conversation() -> ConversationHandler:
         states={
             E_FREQ: [
                 CallbackQueryHandler(every_freq_pick, pattern=r"^e:f:"),
+                CallbackQueryHandler(conv_cancel, pattern=r"^r:cancel$"),
+            ],
+            E_WDAY: [
+                CallbackQueryHandler(every_weekday_pick, pattern=r"^e:wd:"),
                 CallbackQueryHandler(conv_cancel, pattern=r"^r:cancel$"),
             ],
             E_MDAY: [

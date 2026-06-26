@@ -1,7 +1,7 @@
 from datetime import datetime, time
 from zoneinfo import ZoneInfo
 
-from headsup.handlers.reminders import _first_fire, _freq_kb
+from headsup.handlers.reminders import _first_fire, _freq_kb, _weekday_kb
 
 
 def _labels(markup):
@@ -30,3 +30,19 @@ def test_first_fire_every_14_days_uses_next_local_slot():
     assert _first_fire("every:14d", time(7, 0), now, tz) == datetime(
         2026, 6, 27, 7, 0, tzinfo=tz
     )
+
+
+def test_weekday_keyboard_lists_all_days():
+    labels = _labels(_weekday_kb("weekly"))
+    assert labels[0] == ["Mon", "Tue", "Wed", "Thu"]
+    assert labels[1] == ["Fri", "Sat", "Sun"]
+
+
+def test_weekday_keyboard_uses_biweekly_callbacks():
+    callbacks = [
+        button.callback_data
+        for row in _weekday_kb("biweekly").inline_keyboard[:2]
+        for button in row
+    ]
+    assert "e:wd:biweekly:mon" in callbacks
+    assert "e:wd:biweekly:sun" in callbacks

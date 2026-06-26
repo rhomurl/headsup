@@ -121,19 +121,12 @@ def _freq_kb() -> InlineKeyboardMarkup:
         [
             [InlineKeyboardButton("Every day", callback_data="e:f:daily")],
             [
-                InlineKeyboardButton("Mon", callback_data="e:f:weekly:mon"),
-                InlineKeyboardButton("Tue", callback_data="e:f:weekly:tue"),
-                InlineKeyboardButton("Wed", callback_data="e:f:weekly:wed"),
-                InlineKeyboardButton("Thu", callback_data="e:f:weekly:thu"),
-            ],
-            [
-                InlineKeyboardButton("Fri", callback_data="e:f:weekly:fri"),
-                InlineKeyboardButton("Sat", callback_data="e:f:weekly:sat"),
-                InlineKeyboardButton("Sun", callback_data="e:f:weekly:sun"),
+                InlineKeyboardButton("Every week", callback_data="e:f:weekly"),
+                InlineKeyboardButton("Every other week", callback_data="e:f:biweekly"),
             ],
             [
                 InlineKeyboardButton("Every 3 days", callback_data="e:f:every:3d"),
-                InlineKeyboardButton("Every week", callback_data="e:f:every:7d"),
+                InlineKeyboardButton("Every 14 days", callback_data="e:f:every:14d"),
             ],
             [InlineKeyboardButton("Monthly", callback_data="e:f:monthly")],
             [InlineKeyboardButton("Cancel", callback_data="r:cancel")],
@@ -440,7 +433,7 @@ def _first_fire(recurrence: str, t: time, now: datetime, tz: ZoneInfo) -> dateti
     today_at = datetime.combine(now.date(), t, tzinfo=tz)
     if recurrence == "daily" or recurrence.startswith("every:"):
         return today_at if today_at > now else today_at + timedelta(days=1)
-    if recurrence.startswith("weekly:"):
+    if recurrence.startswith("weekly:") or recurrence.startswith("biweekly:"):
         wd = parse.WEEKDAYS[recurrence.split(":", 1)[1]]
         days_ahead = (wd - now.weekday()) % 7
         candidate = today_at + timedelta(days=days_ahead)

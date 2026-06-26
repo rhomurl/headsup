@@ -29,8 +29,9 @@ cp .env.example .env
 # edit .env and set BOT_TOKEN and any other needed values
 
 pm2 start ecosystem.config.js
-pm2 save
 pm2 startup
+# run the sudo command that pm2 prints for your systemd setup
+pm2 save
 ```
 
 Useful commands:
